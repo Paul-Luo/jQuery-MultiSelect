@@ -1,6 +1,6 @@
 /**
  * Display a nice easy to use multiselect list
- * @Version: 2.0.2
+ * @Version: 2.0
  * @Author: Patrick Springstubbe
  * @Contact: @JediNobleclem
  * @Website: springstubbe.us
@@ -61,6 +61,7 @@
         this.element = element;
         this.options = $.extend( {}, defaults, options );
         this.load();
+
     }
 
     MultiSelect.prototype = {
@@ -220,18 +221,27 @@
                 optionsList.before('<a href="#" class="ms-selectall global">Select all</a>');
             }
 
+            var _triggerSelectAll = function() {
+                $(this).prop('checked', !$(this).is(':checked'))
+                $(this).closest( 'li' ).toggleClass( 'selected' );
+                var select = optionsWrap.parent().prev();
+                // toggle clicked option
+                select.find('option[value="'+ $(this).val() +'"]').prop(
+                    'selected', $(this).is(':checked')
+                ).closest('select').trigger('change');
+            };
+
             // handle select all option
             optionsWrap.on('click', '.ms-selectall', function( event ){
                 event.preventDefault();
-
                 if( $(this).hasClass('global') ) {
                     // check if any selected if so then select them
                     if( optionsList.find('li:not(.optgroup)').filter(':not(.selected)').length ) {
-                        optionsList.find('li:not(.optgroup)').filter(':not(.selected)').find('input[type="checkbox"]').trigger('click');
+                        optionsList.find('li:not(.optgroup)').filter(':not(.selected)').find('input[type="checkbox"]').each(_triggerSelectAll);
                     }
                     // deselect everything
                     else {
-                        optionsList.find('li:not(.optgroup).selected input[type="checkbox"]').trigger('click');
+                        optionsList.find('li:not(.optgroup).selected input[type="checkbox"]').each(_triggerSelectAll);
                     }
                 }
                 else if( $(this).closest('li').hasClass('optgroup') ) {
@@ -239,12 +249,18 @@
 
                     // check if any selected if so then select them
                     if( optgroup.find('li:not(.selected)').length ) {
-                        optgroup.find('li:not(.selected) input[type="checkbox"]').trigger('click');
+                        optgroup.find('li:not(.selected) input[type="checkbox"]').each(_triggerSelectAll);
                     }
                     // deselect everything
                     else {
-                        optgroup.find('li.selected input[type="checkbox"]').trigger('click');
+                        optgroup.find('li.selected input[type="checkbox"]').each(_triggerSelectAll);
                     }
+                }
+
+                instance._updatePlaceholderText();
+                // hide native select list
+                if (typeof instance.options.onSelectAll === 'function') {
+                    instance.options.onSelectAll();
                 }
             });
 
@@ -341,19 +357,35 @@
                 ).closest('select').trigger('change');
 
                 if( typeof instance.options.onOptionClick == 'function' ) {
-                    instance.options.onOptionClick(instance.element, this);
+                    instance.options.onOptionClick();
                 }
 
                 instance._updatePlaceholderText();
             });
 
-            // hide native select list
+            // // hide native select list
+            // if( typeof instance.options.onLoad === 'function' ) {
+            //     instance.options.onLoad( instance.element );
+            // }
+            // else {
+            //     $(instance.element).hide();
+            // }
+        },
+
+        onLoad: function () {
+            var instance = this;
             if( typeof instance.options.onLoad === 'function' ) {
                 instance.options.onLoad( instance.element );
             }
             else {
                 $(instance.element).hide();
             }
+        },
+
+        selectAll: function () {
+            var instance = this;
+            var optionsWrap = $(instance.element).next('.ms-options-wrap').find('> .ms-options');
+            optionsWrap.find(".ms-selectall.global").trigger('click');
         },
 
         /* LOAD SELECT OPTIONS */
@@ -368,12 +400,6 @@
             }
 
             for( var key in options ) {
-                // Prevent prototype methods injected into options from being
-                // iterated over.
-                if (!options.hasOwnProperty(key)) {
-                  continue;
-                }
-
                 var thisOption = options[ key ];
                 var container  = $('<li></li>');
 
@@ -388,16 +414,10 @@
                     if( instance.options.selectGroup ) {
                         container.append('<a href="#" class="ms-selectall">Select all</a>')
                     }
-
+                    
                     container.append('<ul></ul>');
 
                     for( var gKey in thisOption.options ) {
-                        // Prevent prototype methods injected into options from
-                        // being iterated over.
-                        if (!thisOption.options.hasOwnProperty(gKey)) {
-                          continue;
-                        }
-
                         var thisGOption = thisOption.options[ gKey ];
                         var gContainer  = $('<li></li>').addClass('ms-reflow');
 
@@ -466,7 +486,11 @@
             });
 
             // UPDATE PLACEHOLDER TEXT WITH OPTIONS SELECTED
-            placeholder.text( selOpts.join( ', ' ) );
+            if(selOpts.length < 5){
+            	placeholder.text( selOpts.join( ', ' ) );
+            }else{
+            	placeholder.text(selOpts.length);
+            }
             var copy = placeholder.clone().css({
                 display   : 'inline',
                 width     : 'auto',
@@ -474,12 +498,17 @@
             }).appendTo( optionsWrap.parent() );
 
             // if the jquery.actual plugin is loaded use it to get the widths
+            /*  the copyWidth is not reliable modified by SOLDIER
             var copyWidth  = (typeof $.fn.actual !== 'undefined') ? copy.actual( 'width', instance.options.jqActualOpts ) : copy.width();
             var placeWidth = (typeof $.fn.actual !== 'undefined') ? placeholder.actual( 'width', instance.options.jqActualOpts ) : placeholder.width();
-
+            console.log("copyWidth"+copyWidth)
+            console.log("placeWidth"+placeWidth)
             // if copy is larger than button width use "# selected"
             if( copyWidth > placeWidth ) {
                 placeholder.text( selOpts.length +' selected' );
+            }*/
+            if( selOpts.length > 3 ) {
+            	placeholder.text( selOpts.length +' selected' );
             }
             // if options selected then use those
             else if( selOpts.length ) {
@@ -526,6 +555,9 @@
             var myNav = navigator.userAgent.toLowerCase();
             return (myNav.indexOf('msie') != -1) ? parseInt(myNav.split('msie')[1]) : false;
         }
+
+        
+
     };
 
     // ENABLE JQUERY PLUGIN FUNCTION
@@ -537,7 +569,9 @@
         if( (options === undefined) || (typeof options === 'object') ) {
             return this.each(function(){
                 if( !$.data( this, 'plugin_multiselect' ) ) {
-                    $.data( this, 'plugin_multiselect', new MultiSelect( this, options ) );
+                    var instance = new MultiSelect( this, options );
+                    $.data( this, 'plugin_multiselect', instance);
+                    instance.onLoad();
                 }
             });
         } else if( (typeof options === 'string') && (options[0] !== '_') && (options !== 'init') ) {
